@@ -1,0 +1,34 @@
+Copyright (c) 2026 Akanji Oluwaseun Gabriel (@asgatcreation)
+All rights reserved.
+
+This software and its source code are published publicly as a portfolio, so that
+clients, employers and reviewers can read the code and try the live demo.
+
+Publishing it does NOT grant any licence to use it.
+
+Without the prior written permission of the author, you may NOT:
+
+  - copy, reproduce or redistribute this software or any substantial part of it;
+  - modify it or create derivative works from it;
+  - use it in any commercial or non-commercial product, service or website;
+  - sublicense, sell, rent or otherwise make it available to others;
+  - remove or alter this notice or the author's attribution.
+
+You MAY view the code on GitHub, and fork it there, solely for the purpose of
+viewing it and only as far as GitHub's Terms of Service permit.
+
+THIRD-PARTY COMPONENTS
+Third-party components keep their own licences. These include the open-source
+packages listed in package.json and pnpm-lock.yaml (such as Node.js, Next.js,
+Fastify, Socket.IO, PostgreSQL and Redis client libraries), and any media used in
+the demo seed data — photographs from Wikimedia Commons under their stated
+Creative Commons or public-domain licences, credited per lot.
+
+NO WARRANTY
+This software is provided "AS IS", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability, fitness
+for a particular purpose and non-infringement. In no event shall the author be
+liable for any claim, damages or other liability arising from, out of or in
+connection with this software or its use.
+
+For permission requests, contact the author through https://github.com/asgatcreation

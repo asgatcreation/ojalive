@@ -1,0 +1,27 @@
+# gitleaks configuration for Ojà Live.
+#
+# The repository must never contain a real key. .env is gitignored; .env.example
+# holds empty placeholders only.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "paystack-secret-key"
+description = "Paystack secret key"
+regex = '''sk_(test|live)_[0-9a-zA-Z]{32,}'''
+tags = ["key", "paystack"]
+
+[[rules]]
+id = "flutterwave-secret-key"
+description = "Flutterwave secret key"
+regex = '''FLWSECK[_-][0-9a-zA-Z]{12,}'''
+tags = ["key", "flutterwave"]
+
+[allowlist]
+description = "Templates and docs, which contain placeholders only"
+paths = [
+  '''\.env\.example$''',
+  '''pnpm-lock\.yaml$''',
+  '''docs/.*\.md$''',
+]

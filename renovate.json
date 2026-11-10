@@ -1,0 +1,33 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommitsDisabled"],
+  "timezone": "Africa/Lagos",
+  "schedule": ["before 6am on monday"],
+  "rangeStrategy": "pin",
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
+  "prConcurrentLimit": 3,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "One grouped PR for routine updates, so review is a single pass",
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "all non-major dependencies"
+    },
+    {
+      "description": "Majors arrive alone, and get read properly",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Never move off a stable release line automatically",
+      "matchPackageNames": ["node", "typescript"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "No pre-release versions, ever. Stability rule.",
+      "matchPackageNames": ["*"],
+      "ignoreUnstable": true
+    }
+  ],
+  "vulnerabilityAlerts": { "labels": ["security"], "automerge": false }
+}

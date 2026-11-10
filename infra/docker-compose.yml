@@ -1,0 +1,66 @@
+# Local development dependencies for Ojà Live.
+#
+#   pnpm docker:up      start Postgres + Redis
+#   pnpm docker:down    stop them, keep the data
+#   pnpm docker:reset   stop them and DELETE the volumes
+#
+# Ports are deliberately NOT the defaults 5432/6379 on the host, and are bound to
+# 127.0.0.1 only, so this never collides with — or is reachable from outside —
+# anything else running on the machine. 55436 and 56386 were chosen because the
+# obvious choices were already taken by other projects on this machine.
+name: ojalive
+
+services:
+  postgres:
+    image: postgres:18.6-trixie
+    container_name: ojalive-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ojalive
+      POSTGRES_PASSWORD: ojalive
+      POSTGRES_DB: ojalive
+      # Deterministic collation so index behaviour matches Neon.
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=en-US --encoding=UTF8'
+      TZ: UTC
+      PGTZ: UTC
+    command:
+      - postgres
+      - -c
+      - timezone=UTC
+      - -c
+      - max_connections=200
+      - -c
+      - log_min_duration_statement=200
+    ports:
+      - '127.0.0.1:55436:5432'
+    volumes:
+      # Postgres 18's image expects a single mount at /var/lib/postgresql and
+      # puts the cluster in a version-named subdirectory, so that a future
+      # `pg_upgrade --link` does not cross a mount boundary. Mounting
+      # /var/lib/postgresql/data (the pre-18 convention) makes it refuse to start.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ojalive -d ojalive']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8.10.3-trixie
+    container_name: ojalive-redis
+    restart: unless-stopped
+    command: ['redis-server', '/usr/local/etc/redis/redis.conf']
+    ports:
+      - '127.0.0.1:56386:6379'
+    volumes:
+      - redis-data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,5 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+minimumReleaseAgeExclude:
+  - '@fastify/cors@11.4.0'
