@@ -2,18 +2,19 @@
 
 Read this and `CLAUDE.md` at the start of every session, then continue from "Next".
 
-Last updated: **10 November 2026**
+Last updated: **11 November 2026**
 
 ---
 
 ## Current state
 
 **Milestone 1 (design & plan): complete and approved.**
-**Milestone 2 (monorepo scaffold): built and verified locally, committed, NOT yet pushed.**
+**Milestone 2 (monorepo scaffold): complete, verified and pushed to `main`.**
 
 `pnpm verify` is green: Prettier, ESLint, `tsc -b`, **53 tests passing**, and all 6 packages
 building. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
-depends on.
+depends on. The holding page was checked in the browser at phone and desktop widths in light and
+dark. Repository: https://github.com/asgatcreation/ojalive
 
 ## Done
 
@@ -63,15 +64,26 @@ depends on.
   `maxmemory-policy noeviction`, `appendfsync everysec`, Lua and Streams working, Postgres on UTC
   with `pg_trgm` available.
 
-## Next (finish milestone 2, then milestone 3)
+### Browser verification (11 November 2026)
 
-1. **Browser check of the holding page** — phone and desktop widths, light and dark, no console
-   errors. Not yet done; it is the one remaining Definition-of-Done item for milestone 2.
-2. **Push to `main`** — blocked on the repo existing (see below). The scaffold is committed locally.
-3. **Milestone 3 — `packages/bid-engine`**: the pure engine (proxy bidding, exact-tie breaking by
-   earlier maximum, soft close, reserve, Buy Now), a simple reference model, and property tests —
-   including the order-independence property from the design doc §7.4: for any shuffling of a set of
-   maxima, the final leader and price are identical.
+- **Desktop, light** — renders correctly; green accent, readable hierarchy.
+- **Desktop, dark** — renders correctly; gold accent on the deep green ground.
+- **Phone, 375 x 812, dark** — no horizontal overflow (`scrollWidth === clientWidth === 375`).
+- `prefers-color-scheme` is honoured: `color-scheme` resolves to `dark` under dark emulation.
+- Money renders server-side from the `bigint` kobo value: **₦8,200,000**.
+- Completed milestones carry a screen-reader-only "(done)", so the status is not colour-only.
+
+## Next (milestone 3 — the pure bid engine)
+
+1. **`packages/bid-engine`**: proxy bidding, exact-tie breaking by earlier maximum, soft close,
+   reserve, Buy Now — as a pure function `(state, command, now) => (state, events, rejection)`.
+2. **A simple reference model** written for clarity rather than speed, and property tests comparing
+   the two.
+3. **The order-independence property** from design doc §7.4: for any shuffling of a set of maxima,
+   the final leader and price are identical. This is the headline correctness claim, so it gets the
+   most thorough test in the package.
+4. Fake-clock tests for the soft close: last-millisecond bids, bids after close, bids during an
+   extension, and the extension cap.
 
 ## Decisions waiting for Akanji
 
@@ -102,5 +114,10 @@ depends on.
   for high-value lots. Both modes get measured and published (design doc §8.1).
 - **`@socket.io/redis-streams-adapter` is pre-1.0** — not used; revisit at 1.0 (ADR-0006).
 - **Auth library** (`better-auth` 1.7.15 is the lean) is decided properly in milestone 7.
+- **Two console errors in `next dev`.** `Uncaught TypeError: Failed to execute 'getComputedStyle'`,
+  thrown from an eval'd `<anonymous>` script. `getComputedStyle` does not appear anywhere in our
+  source — only inside Next's own vendor chunks — so this is development tooling, not our code.
+  Confirm against a production build (`next build && next start`) during the milestone 7 browser
+  pass before calling the page console-clean.
 - **Regulatory.** Holding third-party funds in Nigeria may need CBN approval; the NDPA 2023 applies
   to ID and BVN handling. Documented openly; this build runs on sandbox keys only (design doc §10).
