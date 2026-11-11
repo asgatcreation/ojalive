@@ -114,6 +114,13 @@ dark. Repository: https://github.com/asgatcreation/ojalive
   for high-value lots. Both modes get measured and published (design doc §8.1).
 - **`@socket.io/redis-streams-adapter` is pre-1.0** — not used; revisit at 1.0 (ADR-0006).
 - **Auth library** (`better-auth` 1.7.15 is the lean) is decided properly in milestone 7.
+- **pnpm 12 refuses to install while a dependency's install scripts are undeclared.** This failed
+  both CI jobs at the install step on the first two runs. Allowed scripts are declared in
+  `pnpm-workspace.yaml` under **`allowBuilds:`** — note the key, not `onlyBuiltDependencies`, which
+  is the pnpm 10 name and is silently ignored. Use `pnpm approve-builds <pkg> --yes` to add one; it
+  writes the file itself.
+- **`apps/web/next-env.d.ts` is no longer tracked.** Next generates it, and writes a different
+  version for `next dev` than for `next build`, so tracking it meant a permanently dirty tree.
 - **Two console errors in `next dev`.** `Uncaught TypeError: Failed to execute 'getComputedStyle'`,
   thrown from an eval'd `<anonymous>` script. `getComputedStyle` does not appear anywhere in our
   source — only inside Next's own vendor chunks — so this is development tooling, not our code.
