@@ -9,12 +9,13 @@ Last updated: **11 November 2026**
 ## Current state
 
 **Milestone 1 (design & plan): complete and approved.**
-**Milestone 2 (monorepo scaffold): complete, verified and pushed to `main`.**
+**Milestone 2 (monorepo scaffold): complete. Pushed to `main` and CI is green.**
 
 `pnpm verify` is green: Prettier, ESLint, `tsc -b`, **53 tests passing**, and all 6 packages
 building. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
 depends on. The holding page was checked in the browser at phone and desktop widths in light and
-dark. Repository: https://github.com/asgatcreation/ojalive
+dark. **GitHub Actions run #5 on commit `69d2691` passed all three jobs** (verify, secret scanning,
+dependency audit) in 34 s. Repository: https://github.com/asgatcreation/ojalive
 
 ## Done
 
@@ -73,6 +74,19 @@ dark. Repository: https://github.com/asgatcreation/ojalive
 - Money renders server-side from the `bigint` kobo value: **₦8,200,000**.
 - Completed milestones carry a screen-reader-only "(done)", so the status is not colour-only.
 
+### CI (11 November 2026)
+
+Runs #1–#4 failed, each for a real reason now fixed and recorded below. Run **#5 is green**.
+
+| Run    | Failed on          | Cause                                                                                                                                                | Fix                                                                             |
+| ------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| #1, #2 | install, both jobs | pnpm 12 refuses to install while a dependency's install scripts are undeclared                                                                       | `allowBuilds:` in `pnpm-workspace.yaml`                                         |
+| #3, #4 | lint               | CI lints **before** it builds, so `@ojalive/*` resolved to `dist` types that did not exist yet, and every `no-unsafe-*` rule fired across `apps/api` | `paths` in `tsconfig.lint.json` mapping the workspace packages to their sources |
+
+The lesson for future milestones: **a clean checkout is not the same as this machine.** Reproduce a
+CI failure locally by deleting every `dist`, `.turbo` and `.next` directory first, then running
+`pnpm verify`.
+
 ## Next (milestone 3 — the pure bid engine)
 
 1. **`packages/bid-engine`**: proxy bidding, exact-tie breaking by earlier maximum, soft close,
@@ -126,5 +140,8 @@ dark. Repository: https://github.com/asgatcreation/ojalive
   source — only inside Next's own vendor chunks — so this is development tooling, not our code.
   Confirm against a production build (`next build && next start`) during the milestone 7 browser
   pass before calling the page console-clean.
+- **`pnpm/action-setup@v4` and `gitleaks/gitleaks-action@v2` still target Node 20**, so GitHub
+  prints a deprecation warning on every run. Warnings only, not failures. Revisit when those
+  actions publish Node 24 releases.
 - **Regulatory.** Holding third-party funds in Nigeria may need CBN approval; the NDPA 2023 applies
   to ID and BVN handling. Documented openly; this build runs on sandbox keys only (design doc §10).
