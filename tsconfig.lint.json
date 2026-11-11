@@ -14,7 +14,17 @@
     "lib": ["ES2023", "dom", "dom.iterable"],
     "jsx": "preserve",
     "types": ["node"],
-    "allowJs": true
+    "allowJs": true,
+    // Resolve workspace packages to their SOURCES. Each package's package.json
+    // points at its built dist, which does not exist when CI lints before it
+    // builds — and an unresolved type makes every no-unsafe-* rule fire on code
+    // that is actually fine. This mirrors the same aliasing in vitest.config.ts.
+    "baseUrl": ".",
+    "paths": {
+      "@ojalive/shared": ["packages/shared/src/index.ts"],
+      "@ojalive/bid-engine": ["packages/bid-engine/src/index.ts"],
+      "@ojalive/payments": ["packages/payments/src/index.ts"]
+    }
   },
   "include": [
     "*.ts",
