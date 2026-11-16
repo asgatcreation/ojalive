@@ -11,3 +11,4 @@ inherit. Format: context, decision, why, alternatives considered, consequences.
 | [0004](0004-typescript-6-not-7.md)                     | TypeScript 6, not 7                                                   | Accepted |
 | [0005](0005-append-only-log-rebuildable-projection.md) | Append-only bid log with a rebuildable projection                     | Accepted |
 | [0006](0006-socketio-redis-adapter-own-resync.md)      | Socket.IO redis-adapter plus our own sequence resync                  | Accepted |
+| [0007](0007-tie-breaking-and-order-independence.md)    | Ties go to the earlier maximum, and what order independence claims    | Accepted |

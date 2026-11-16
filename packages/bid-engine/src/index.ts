@@ -1,11 +1,14 @@
 /**
  * @ojalive/bid-engine — the pure bidding logic.
  *
- * Milestone 2 (this one) establishes the package, its vocabulary and the
- * increment table. Milestone 3 adds the engine itself: proxy bidding, tie
- * breaking, soft close, reserve handling, the reference model and the
- * property-based tests that compare the two.
+ * `apply(state, command, now)` is the whole engine; `replay(state, log)` rebuilds
+ * a lot from its append-only log, which is how retractions and recovery work.
+ *
+ * `reference.ts` and `test-support.ts` are deliberately not re-exported: they
+ * exist for the tests, and for milestone 4's differential tests against the Lua
+ * script, which import them by path.
  */
 
 export * from './types.js';
 export * from './increments.js';
+export * from './engine.js';

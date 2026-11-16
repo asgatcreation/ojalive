@@ -73,6 +73,15 @@ Same winner, same price, either way. The highest maximum wins and pays one incre
 second-highest, regardless of arrival order. That is a property, not a coincidence, and it is
 asserted over thousands of random permutations with `fast-check`.
 
+The property is stated precisely, because the precise version is the useful one: it holds for
+maximums that are more than one increment apart. Two bidders whose maximums sit inside a single
+increment of each other, or an exact tie, are settled by **arrival order** — the earlier maximum
+keeps the lead. That is a deliberate rule, not a gap: someone has to win, and the server's own
+sequence number is the only fair arbiter of who was first.
+[ADR-0007](docs/adr/0007-tie-breaking-and-order-independence.md) explains it, and the engine is
+also checked against an independent reference model on random sequences with no spacing assumption
+at all.
+
 More worked examples — proxy bidding with exact ties, the anti-sniping soft close, and a retraction
 replayed from the log — are in [the design document](docs/MILESTONE-1-DESIGN.md#7-the-bid-engine--the-heart-of-the-project).
 

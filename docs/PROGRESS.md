@@ -2,7 +2,7 @@
 
 Read this and `CLAUDE.md` at the start of every session, then continue from "Next".
 
-Last updated: **11 November 2026**
+Last updated: **17 November 2026**
 
 ---
 
@@ -10,8 +10,9 @@ Last updated: **11 November 2026**
 
 **Milestone 1 (design & plan): complete and approved.**
 **Milestone 2 (monorepo scaffold): complete. Pushed to `main` and CI is green.**
+**Milestone 3 (the pure bid engine): complete. 96 tests, including the order-independence property.**
 
-`pnpm verify` is green: Prettier, ESLint, `tsc -b`, **53 tests passing**, and all 6 packages
+`pnpm verify` is green: Prettier, ESLint, `tsc -b`, **96 tests passing**, and all 6 packages
 building. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
 depends on. The holding page was checked in the browser at phone and desktop widths in light and
 dark. **GitHub Actions run #5 on commit `69d2691` passed all three jobs** (verify, secret scanning,
@@ -87,29 +88,73 @@ The lesson for future milestones: **a clean checkout is not the same as this mac
 CI failure locally by deleting every `dist`, `.turbo` and `.next` directory first, then running
 `pnpm verify`.
 
-## Next (milestone 3 — the pure bid engine)
+### Milestone 3 — the pure bid engine (17 November 2026)
 
-1. **`packages/bid-engine`**: proxy bidding, exact-tie breaking by earlier maximum, soft close,
-   reserve, Buy Now — as a pure function `(state, command, now) => (state, events, rejection)`.
-2. **A simple reference model** written for clarity rather than speed, and property tests comparing
-   the two.
-3. **The order-independence property** from design doc §7.4: for any shuffling of a set of maxima,
-   the final leader and price are identical. This is the headline correctness claim, so it gets the
-   most thorough test in the package.
-4. Fake-clock tests for the soft close: last-millisecond bids, bids after close, bids during an
-   extension, and the extension cap.
+- **`apply(state, command, now)` is the whole engine** — `packages/bid-engine/src/engine.ts`. No
+  clock, no Redis, no `await`. Proxy bidding, exact-tie breaking by the earlier maximum, the
+  anti-sniping soft close, hidden reserves, Buy Now, and closing with an outcome (`sold`,
+  `unsold_no_bids`, `unsold_reserve_not_met`).
+- **`replay(state, log)`** rebuilds a lot from its log. Worked example D from the design doc is a
+  test: drop Emeka's retracted bid, replay, and Funke leads at ₦76,000 — no hand-written correction.
+- **Events are typed and `seq`-stamped.** One accepted command advances `seq` exactly once and every
+  event it produces carries that `seq`, which is what a reconnecting client resyncs against.
+  `bid_placed` is the only event that carries a secret maximum; it is persisted, never broadcast.
+- **A reference model** (`reference.ts`) computes the winner and price from the _set_ of accepted
+  maximums using the economic rule of a proxy auction — no state machine. Two independent
+  formulations that must agree.
+- **Property tests** (`properties.test.ts`): order independence over 2,000 random arrival orders;
+  engine versus reference over 3,000 random sequences including repeats, tight spacing and bids
+  below the starting price; and per-command invariants — the price never falls, never exceeds the
+  leader's maximum, the leader always holds the highest accepted maximum, a refused bid changes
+  nothing at all.
+- **Fake-clock soft-close tests** (`soft-close.test.ts`) reproduce design doc §7.5 to the
+  millisecond: outside the window, inside the window, the window edge, successive extensions, the
+  30-minute cap, bids after the capped end, and closing at the extended end rather than the original.
+- **ADR-0007** records what the order-independence claim actually says, why ties go to the earlier
+  maximum, and why the leader may not raise their own maximum.
+- **The tests were themselves tested.** Three deliberate mutations of the engine — a losing bid not
+  raising the price, an exact tie handed to the later maximum, and the soft close extending from the
+  end time instead of the bid time — were each caught (6, 4 and 2 failures). A suite that passes
+  first time is worth that check.
+
+## Next (milestone 4 — atomic bid acceptance on Redis and Postgres)
+
+1. **The Lua script**: a faithful port of `apply`, all state under one hash-tagged key `{lot:<id>}`,
+   appending to a Redis Stream in the same atomic run.
+2. **A differential test**: thousands of random command sequences through both the TypeScript engine
+   and the real Lua script in Redis, asserting identical state. `test-support.ts` and `reference.ts`
+   exist for this.
+3. **Drizzle schema and migrations**: `bid_events` append-only, `lot_state` as a projection,
+   `lot_closures` with the unique constraint, `UNIQUE (lot_id, user_id, idempotency_key)`.
+4. **Idempotency** in Lua plus the database constraint — a retry returns the original outcome.
+5. **Exactly-once closing**: the delayed BullMQ job, the job re-reading the database end time, the
+   compare-and-set in Lua, the unique constraint, and the 30-second sweeper.
+6. **Race tests** against real Redis and Postgres: N concurrent bidders on one lot, asserting one
+   winner, no lost or duplicated bids, and exactly one closure.
 
 ## Decisions waiting for Akanji
 
 | #   | Decision                                                                                                                                                  | Default if he doesn't mind                               |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| 1   | **Create the empty public repo `ojalive`** (Public, no README, no .gitignore, no licence) and send the URL                                                | — blocks the push                                        |
-| 2   | Domain and social handles: `ojalive.com` / `ojalive.ng` / `oja.live`, `@ojalive`                                                                          | Proceed with the name; tweak branding if `.com` is taken |
-| 3   | Redis: self-run on a Fly machine (recommended) vs Redis Cloud Essentials ~$5/mo                                                                           | Self-run on Fly                                          |
-| 4   | Neon free plan's current restore window — decides whether we pay $19/mo for Launch                                                                        | Start on Free, upgrade before the milestone 10 deploy    |
-| 5   | **Node 26 LTS locally.** This machine has Node 24.16.0. CI runs 26.13.0 and `engines` allows 24.16+, so nothing is blocked, but local and CI should match | Install Node 26 LTS when convenient                      |
+| 1   | Domain and social handles: `ojalive.com` / `ojalive.ng` / `oja.live`, `@ojalive`                                                                          | Proceed with the name; tweak branding if `.com` is taken |
+| 2   | Redis: self-run on a Fly machine (recommended) vs Redis Cloud Essentials ~$5/mo                                                                           | Self-run on Fly                                          |
+| 3   | Neon free plan's current restore window — decides whether we pay $19/mo for Launch                                                                        | Start on Free, upgrade before the milestone 10 deploy    |
+| 4   | **Node 26 LTS locally.** This machine has Node 24.16.0. CI runs 26.13.0 and `engines` allows 24.16+, so nothing is blocked, but local and CI should match | Install Node 26 LTS when convenient                      |
 
 ## Open issues / things to revisit
+
+- **Order independence is not universal, and the claim now says so.** It holds for maximums more
+  than one increment apart and at least two increments above the starting price. Inside one
+  increment — and for a maximum equal to the starting price, which is only acceptable as the very
+  first bid — arrival order can decide whether a bid is accepted at all, so the price can differ.
+  Found while writing the property test, not after. Arbitrary sequences are covered by the reference
+  model instead. ADR-0007, and the claim carries its condition in the README.
+- **The leader cannot raise their own maximum** (`already_leading`). A raise cannot move the price,
+  so it would only buy an invisible advantage in a later tie. Revisit if real bidders ask for it —
+  ADR-0007 records the consequence to handle if we do.
+- **Idempotency is not in the pure engine.** It has no memory of previous keys by design; the Lua
+  script and `UNIQUE (lot_id, user_id, idempotency_key)` own it in milestone 4. What the engine
+  guarantees is determinism, which is what makes a replayed retry safe.
 
 - **TypeScript 6, not 7.** `typescript-eslint@8.72.1` declares `typescript >=4.8.4 <6.1.0`, so TS 7
   would leave the linter unsupported. Revisit when it ships support (ADR-0004).
