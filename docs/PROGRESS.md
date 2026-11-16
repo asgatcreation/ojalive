@@ -15,8 +15,8 @@ Last updated: **17 November 2026**
 `pnpm verify` is green: Prettier, ESLint, `tsc -b`, **96 tests passing**, and all 6 packages
 building. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
 depends on. The holding page was checked in the browser at phone and desktop widths in light and
-dark. **GitHub Actions run #5 on commit `69d2691` passed all three jobs** (verify, secret scanning,
-dependency audit) in 34 s. Repository: https://github.com/asgatcreation/ojalive
+dark. **GitHub Actions run #7 on commit `d6cafdd` passed all three jobs** (verify, secret scanning,
+dependency audit) in 48 s. Repository: https://github.com/asgatcreation/ojalive
 
 ## Done
 
