@@ -25,7 +25,8 @@
     "docker:up": "docker compose -f infra/docker-compose.yml up -d",
     "docker:down": "docker compose -f infra/docker-compose.yml down",
     "docker:reset": "docker compose -f infra/docker-compose.yml down -v",
-    "verify": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
+    "verify": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
+    "test:int": "vitest run --config vitest.int.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

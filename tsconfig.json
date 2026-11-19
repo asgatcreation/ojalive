@@ -3,6 +3,8 @@
   "references": [
     { "path": "./packages/shared" },
     { "path": "./packages/bid-engine" },
+    { "path": "./packages/db" },
+    { "path": "./packages/live" },
     { "path": "./packages/payments" },
     { "path": "./apps/api" },
     { "path": "./apps/worker" }

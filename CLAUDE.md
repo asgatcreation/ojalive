@@ -95,6 +95,8 @@ nearer the user. See `docs/adr/0002-single-region-london.md`.
 | `apps/worker`         | BullMQ: lot closing, the stuck-lot sweeper, bid persistence, settlement, notifications, demo bots.                                        |
 | `packages/shared`     | Types, zod schemas, money (integer kobo), time and clocks, ids. No I/O.                                                                   |
 | `packages/bid-engine` | **Pure** bidding logic. No Redis, no database, no `Date.now()`. The reference model the Lua script is tested against.                     |
+| `packages/db`         | Drizzle schema, migrations and every query the bidding path makes. Postgres is the source of truth.                                       |
+| `packages/live`       | The real-time path: the Lua scripts (`src/lua`), the script runner, the Redis read path, the per-lot event stream, and closing.           |
 | `packages/payments`   | The `PaymentGateway` interface. Implemented with naija-pay in milestone 8.                                                                |
 | `load-tests/`         | k6 scripts (run as a Docker container, not an npm package).                                                                               |
 | `infra/`              | Docker Compose for local Postgres + Redis, and the Redis config.                                                                          |
@@ -133,13 +135,17 @@ pnpm docker:up               # start local Postgres 18.6 + Redis 8.10
 pnpm docker:down             # stop them, keep the data
 pnpm docker:reset            # stop them and DELETE the volumes
 
+pnpm --filter @ojalive/db db:generate   # generate a migration from the schema
+pnpm --filter @ojalive/db db:migrate    # apply pending migrations (needs DATABASE_URL)
+
 pnpm dev                     # run web + api + worker in watch mode
 pnpm --filter @ojalive/api dev
 
 pnpm verify                  # format:check + lint + typecheck + test + build — run before every commit
 pnpm lint
 pnpm typecheck               # tsc -b across the project references
-pnpm test                    # vitest, unit tests
+pnpm test                    # vitest, unit tests (no database needed)
+pnpm test:int                # integration tests: real Postgres, Redis and Lua (needs docker:up)
 pnpm test:coverage
 pnpm build                   # turbo run build
 pnpm format                  # prettier --write .

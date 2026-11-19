@@ -49,6 +49,51 @@ jobs:
       - name: Build
         run: pnpm run build
 
+  integration:
+    name: Integration tests (real Postgres, Redis and Lua)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Compose rather than service containers, deliberately: the bid engine
+      # depends on Redis settings (noeviction, appendfsync everysec) that live in
+      # infra/redis/redis.conf, and a service container cannot mount a config
+      # file. This way CI runs against the same configuration a developer does.
+      - name: Start Postgres and Redis
+        run: docker compose -f infra/docker-compose.yml up -d --wait
+
+      - name: Apply migrations
+        run: pnpm --filter @ojalive/db db:migrate
+        env:
+          DATABASE_URL: postgresql://ojalive:ojalive@localhost:55436/ojalive
+
+      - name: Integration tests
+        run: pnpm run test:int
+        env:
+          TEST_DATABASE_URL: postgresql://ojalive:ojalive@localhost:55436/ojalive
+          TEST_REDIS_URL: redis://localhost:56386
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --tail=200
+
+      - name: Stop containers
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v
+
   secrets:
     name: Secret scanning
     runs-on: ubuntu-24.04

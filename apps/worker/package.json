@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@ojalive/bid-engine": "workspace:*",
+    "@ojalive/db": "workspace:*",
+    "@ojalive/live": "workspace:*",
     "@ojalive/payments": "workspace:*",
     "@ojalive/shared": "workspace:*",
     "@sentry/node": "11.10.0",

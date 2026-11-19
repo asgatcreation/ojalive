@@ -23,7 +23,10 @@
     "paths": {
       "@ojalive/shared": ["packages/shared/src/index.ts"],
       "@ojalive/bid-engine": ["packages/bid-engine/src/index.ts"],
-      "@ojalive/payments": ["packages/payments/src/index.ts"]
+      "@ojalive/payments": ["packages/payments/src/index.ts"],
+      "@ojalive/db": ["packages/db/src/index.ts"],
+      "@ojalive/live": ["packages/live/src/index.ts"],
+      "@ojalive/live/int-support": ["packages/live/src/int-support.ts"]
     }
   },
   "include": [
@@ -33,6 +36,7 @@
     "apps/*/src/**/*.tsx",
     "apps/*/*.ts",
     "packages/*/src/**/*.ts",
+    "packages/*/*.ts",
     "load-tests/**/*.ts",
     "scripts/**/*.ts"
   ],

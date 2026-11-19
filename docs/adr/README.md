@@ -12,3 +12,4 @@ inherit. Format: context, decision, why, alternatives considered, consequences.
 | [0005](0005-append-only-log-rebuildable-projection.md) | Append-only bid log with a rebuildable projection                     | Accepted |
 | [0006](0006-socketio-redis-adapter-own-resync.md)      | Socket.IO redis-adapter plus our own sequence resync                  | Accepted |
 | [0007](0007-tie-breaking-and-order-independence.md)    | Ties go to the earlier maximum, and what order independence claims    | Accepted |
+| [0008](0008-per-lot-streams-for-persistence.md)        | One Redis Stream per lot, drained by a consumer group                 | Accepted |

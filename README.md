@@ -85,6 +85,22 @@ at all.
 More worked examples — proxy bidding with exact ties, the anti-sniping soft close, and a retraction
 replayed from the log — are in [the design document](docs/MILESTONE-1-DESIGN.md#7-the-bid-engine--the-heart-of-the-project).
 
+### How the fast path is kept honest
+
+The rules exist twice: once as a pure TypeScript function, once as the Lua script that actually
+decides every real bid inside Redis. Two implementations of one rulebook always drift, so they are
+checked against each other rather than trusted:
+
+| What is proven                              | How                                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| The Lua script matches the reference engine | Random command sequences through both, state compared field by field after every command   |
+| No bid is lost or doubled under concurrency | 300 simultaneous bids on one lot: sequence numbers come out 1..n, no gaps, no repeats      |
+| A retry places one bid                      | Twenty copies of one bid at once: one acceptance, nineteen replays of the original outcome |
+| A lot closes exactly once                   | Twenty workers closing the same lot at once: one closure row, one close event              |
+| Losing Redis costs nothing                  | Every key for a live lot deleted mid-auction, then rebuilt from the log and carried on     |
+
+Run them yourself with `pnpm docker:up && pnpm test:int`.
+
 ## Features
 
 **Bidding**

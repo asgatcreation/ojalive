@@ -2,7 +2,7 @@
 
 Read this and `CLAUDE.md` at the start of every session, then continue from "Next".
 
-Last updated: **17 November 2026**
+Last updated: **19 November 2026**
 
 ---
 
@@ -11,9 +11,12 @@ Last updated: **17 November 2026**
 **Milestone 1 (design & plan): complete and approved.**
 **Milestone 2 (monorepo scaffold): complete. Pushed to `main` and CI is green.**
 **Milestone 3 (the pure bid engine): complete. 96 tests, including the order-independence property.**
+**Milestone 4 (atomic bid acceptance on Redis and Postgres): complete. 125 unit tests plus 23
+integration tests against real Postgres, Redis and Lua.**
 
-`pnpm verify` is green: Prettier, ESLint, `tsc -b`, **96 tests passing**, and all 6 packages
-building. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
+`pnpm verify` is green: Prettier, ESLint, `tsc -b`, **125 unit tests passing**, and all 8 packages
+building. `pnpm test:int` is green too: **24 integration tests** covering 300 simultaneous bids on
+one lot, idempotency, exactly-once closing, and recovery from losing Redis entirely. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
 depends on. The holding page was checked in the browser at phone and desktop widths in light and
 dark. **GitHub Actions run #7 on commit `d6cafdd` passed all three jobs** (verify, secret scanning,
 dependency audit) in 48 s. Repository: https://github.com/asgatcreation/ojalive
@@ -117,20 +120,57 @@ CI failure locally by deleting every `dist`, `.turbo` and `.next` directory firs
   end time instead of the bid time — were each caught (6, 4 and 2 failures). A suite that passes
   first time is worth that check.
 
-## Next (milestone 4 — atomic bid acceptance on Redis and Postgres)
+### Milestone 4 — atomic bid acceptance (19 November 2026)
 
-1. **The Lua script**: a faithful port of `apply`, all state under one hash-tagged key `{lot:<id>}`,
-   appending to a Redis Stream in the same atomic run.
-2. **A differential test**: thousands of random command sequences through both the TypeScript engine
-   and the real Lua script in Redis, asserting identical state. `test-support.ts` and `reference.ts`
-   exist for this.
-3. **Drizzle schema and migrations**: `bid_events` append-only, `lot_state` as a projection,
-   `lot_closures` with the unique constraint, `UNIQUE (lot_id, user_id, idempotency_key)`.
-4. **Idempotency** in Lua plus the database constraint — a retry returns the original outcome.
-5. **Exactly-once closing**: the delayed BullMQ job, the job re-reading the database end time, the
-   compare-and-set in Lua, the unique constraint, and the 30-second sweeper.
-6. **Race tests** against real Redis and Postgres: N concurrent bidders on one lot, asserting one
-   winner, no lost or duplicated bids, and exactly one closure.
+- **`packages/db`**: Drizzle schema for the bidding slice — `users`, `sales`, `lots`, the
+  append-only `bid_events`, the rebuildable `lot_state` projection, and `lot_closures`. Money is
+  `bigint` kobo throughout; timestamps are `timestamptz` in UTC. Migration `0000_bidding_slice`.
+- **`packages/live`**: the Lua scripts (`src/lua/place-bid.lua`, `buy-now.lua`, `close-lot.lua`,
+  `seed-state.lua`, with a shared `prelude.lua`), loaded as `EVALSHA` with an `EVAL` fallback; the
+  Redis read path; the per-lot event stream; and the four-layer close.
+- **The differential test** is the centrepiece: random command sequences run through both the Lua
+  script and the pure engine, with state compared field by field after every command. The Lua
+  script is what decides real bids, so "it matches the reference model" has to be a test, not a
+  claim.
+- **300 simultaneous bids on one lot**: sequence numbers come out 1..n with no gaps and no repeats,
+  the price never falls, one winner, and the order Redis chose replays through the pure engine to
+  exactly the state Redis holds.
+- **Idempotency**: twenty copies of one bid arriving at once produce one accepted bid and nineteen
+  replays of the original outcome. The database backstop is tested separately by persisting the same
+  stream entries twice — the second pass writes nothing.
+- **Exactly-once closing**: twenty workers closing the same lot simultaneously produce one closure
+  row and one close event. A lot whose end time moved reschedules instead of closing. A closure that
+  Redis completed but whose worker died is finished by the sweeper.
+- **Losing Redis entirely** (design doc §8.2): every key for a lot is deleted mid-auction, and the
+  next bid rebuilds the state from `bid_events`, recomputes the extensions from the soft-close rule,
+  and carries on at the right sequence number.
+- **`apps/worker`** now runs for real: the persistence loop, the delayed close job, and the 30-second
+  sweeper, with an end-to-end test that places bids and lets the real BullMQ job close the lot on
+  time.
+- **CI** gained an `integration` job that brings up `infra/docker-compose.yml` — the same Redis
+  config as local, because the engine depends on `noeviction` — applies migrations and runs
+  `pnpm test:int`.
+- **ADR-0008** records why persistence goes through one Redis Stream per lot.
+- **Mutation testing again, and this time it found two gaps in my own tests.** Breaking the Lua
+  tie-break rule did _not_ fail the differential test, because the wide generator drew maximums from
+  256 values and two bidders almost never picked the same one; a tie-prone generator was added and
+  now catches it. Breaking the money formatter did not fail either — and that one turned out to be
+  honest: Lua prints with `%.14g`, so `tostring` is exact below 1e15 kobo (₦10 trillion), which no
+  lot will reach. The threshold is now pinned in `money-format.int.test.ts` and the comment says
+  what the helper is really for.
+
+## Next (milestone 5 — the real-time layer)
+
+1. **Socket.IO on `apps/api`** with `@socket.io/redis-adapter`, rooms per lot, and small delta
+   payloads carrying `seq`.
+2. **Resync**: a client sends `resync { lotId, fromSeq }` on reconnect and gets the events it missed
+   from the lot's stream plus a snapshot. The stream already holds exactly this; milestone 5 wires
+   it up and adds stream trimming.
+3. **Presence and clock sync**: watcher counts, and the NTP-style offset exchange so countdowns are
+   drawn against server time (design doc §7.6).
+4. **Two API instances behind one Redis**, with Playwright driving several browsers at once to prove
+   a bid in one reaches the others inside the 500 ms target.
+5. **A REST fallback** for the same data, for connections where WebSockets never establish.
 
 ## Decisions waiting for Akanji
 
@@ -142,6 +182,20 @@ CI failure locally by deleting every `dist`, `.turbo` and `.next` directory firs
 | 4   | **Node 26 LTS locally.** This machine has Node 24.16.0. CI runs 26.13.0 and `engines` allows 24.16+, so nothing is blocked, but local and CI should match | Install Node 26 LTS when convenient                      |
 
 ## Open issues / things to revisit
+
+- **The Lua script and the TypeScript engine are two implementations of one set of rules.** They are
+  kept in step by the differential test, not by discipline. Any change to `packages/bid-engine` must
+  be made in `packages/live/src/lua` as well, and `pnpm test:int` is what catches it if not.
+- **Idempotency lives in two places on purpose.** Redis remembers keys for 24 hours (long enough for
+  any client retry) and `UNIQUE (lot_id, user_id, idempotency_key)` remembers them forever. The Redis
+  copy is for answering fast; the constraint is for being right.
+- **The engine's idempotency check runs BEFORE the rules**, which is a deliberate departure from the
+  order in design doc §7.2. A retry of an accepted bid must get the original answer; if the rules ran
+  first, the leader retrying their own bid would be told "you already lead this lot".
+- **`lot_closures.winning_bid_event_id` references `bid_events` with RESTRICT**, so anything deleting
+  a lot's history must remove the closure first. Found by the integration tests' own cleanup failing.
+- **Stream trimming is not implemented yet.** Each lot's stream grows without bound. It is harmless
+  at demo scale and belongs with resync in milestone 5, where the retention window is decided.
 
 - **Order independence is not universal, and the claim now says so.** It holds for maximums more
   than one increment apart and at least two increments above the starting price. Inside one
