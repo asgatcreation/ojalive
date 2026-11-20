@@ -2,7 +2,7 @@
 
 Read this and `CLAUDE.md` at the start of every session, then continue from "Next".
 
-Last updated: **19 November 2026**
+Last updated: **20 November 2026**
 
 ---
 
@@ -18,8 +18,9 @@ integration tests against real Postgres, Redis and Lua.**
 building. `pnpm test:int` is green too: **24 integration tests** covering 300 simultaneous bids on
 one lot, idempotency, exactly-once closing, and recovery from losing Redis entirely. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
 depends on. The holding page was checked in the browser at phone and desktop widths in light and
-dark. **GitHub Actions run #7 on commit `d6cafdd` passed all three jobs** (verify, secret scanning,
-dependency audit) in 48 s. Repository: https://github.com/asgatcreation/ojalive
+dark. **GitHub Actions run #9 on commit `6d0420c` passed all four jobs**: verify (43 s), integration
+tests against real Postgres, Redis and Lua (47 s), secret scanning (16 s) and dependency audit
+(38 s). Repository: https://github.com/asgatcreation/ojalive
 
 ## Done
 
