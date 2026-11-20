@@ -14,9 +14,10 @@ Last updated: **20 November 2026**
 **Milestone 4 (atomic bid acceptance on Redis and Postgres): complete. 125 unit tests plus 23
 integration tests against real Postgres, Redis and Lua.**
 
-`pnpm verify` is green: Prettier, ESLint, `tsc -b`, **125 unit tests passing**, and all 8 packages
-building. `pnpm test:int` is green too: **24 integration tests** covering 300 simultaneous bids on
-one lot, idempotency, exactly-once closing, and recovery from losing Redis entirely. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
+`pnpm verify` is green: Prettier, ESLint, `tsc -b`, **134 unit tests passing**, and all 8 packages
+building. `pnpm test:int` is green too: **42 integration tests** covering 300 simultaneous bids on
+one lot, idempotency, exactly-once closing, recovery from losing Redis entirely, and delta delivery
+across two API instances. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
 depends on. The holding page was checked in the browser at phone and desktop widths in light and
 dark. **GitHub Actions run #9 on commit `6d0420c` passed all four jobs**: verify (43 s), integration
 tests against real Postgres, Redis and Lua (47 s), secret scanning (16 s) and dependency audit
@@ -160,18 +161,58 @@ CI failure locally by deleting every `dist`, `.turbo` and `.next` directory firs
   lot will reach. The threshold is now pinned in `money-format.int.test.ts` and the comment says
   what the helper is really for.
 
-## Next (milestone 5 — the real-time layer)
+### Milestone 5 — the real-time layer (20 November 2026)
 
-1. **Socket.IO on `apps/api`** with `@socket.io/redis-adapter`, rooms per lot, and small delta
-   payloads carrying `seq`.
-2. **Resync**: a client sends `resync { lotId, fromSeq }` on reconnect and gets the events it missed
-   from the lot's stream plus a snapshot. The stream already holds exactly this; milestone 5 wires
-   it up and adds stream trimming.
-3. **Presence and clock sync**: watcher counts, and the NTP-style offset exchange so countdowns are
-   drawn against server time (design doc §7.6).
-4. **Two API instances behind one Redis**, with Playwright driving several browsers at once to prove
-   a bid in one reaches the others inside the 500 ms target.
-5. **A REST fallback** for the same data, for connections where WebSockets never establish.
+- **Socket.IO on `apps/api`**, attached to the port Fastify already listens on, with
+  `@socket.io/redis-adapter` for cross-instance watcher counts. Sockets are **read-only**: watch,
+  resync, and the clock exchange. There is deliberately no bid endpoint yet — a bid needs an
+  authenticated caller, and authentication is milestone 7. An endpoint that took a user id on trust
+  would be a hole, and shipping one "just for the demo" is how holes become permanent.
+- **Deltas arrive by tailing each lot's event stream**, not by emitting on accept. The reason is the
+  worker: it closes lots, it is not a Socket.IO server, and a closing lot is the most important event
+  a watcher gets. Tailing means whoever appends to the stream is broadcast, through one path.
+  **ADR-0009**, which amends ADR-0006.
+- **Stream entry ids are now the lot's `seq`** (`<seq>-0`), so the stream is an index on `seq` and a
+  reconnecting client is served by a seek rather than a scan. Streams are trimmed to a 2,000-event
+  reconnect window.
+- **Resync**: a client sends its last `seq` and gets the events it missed — or, if the stream no
+  longer reaches that far, a snapshot. Both sides of that boundary are tested, on the socket path and
+  the REST path.
+- **A REST fallback** (`GET /lots/:id/state`, `GET /lots/:id/events?fromSeq=`, `GET /time`) returns
+  the same facts for connections where WebSockets never establish — a real condition on Nigerian
+  mobile networks, not a theoretical one. Both are `cache-control: no-store`: a cached price is a
+  price somebody would bid against.
+- **Secrecy is enforced in one place.** `toPublicEvent` and `toPublicSnapshot` in `packages/live` are
+  the only gate between a stream entry (which carries the bidder's secret maximum, because the
+  persisting worker needs it) and anything a watcher sees. A reserve is reported as "exists" and
+  "met or not", never as an amount.
+- **Two instances, real socket clients, measured**: a bid accepted anywhere reaches watchers on both
+  instances, in sequence order, exactly once each. Delta latency measured at **21 ms for the first
+  (it includes the tailer's connection handshake) and 4–23 ms after that**, against a 500 ms target.
+  Published by `timing.int.test.ts` rather than averaged into a pass.
+- **Mutation testing earned its place again.** Changing the delta emit from `io.local.to(...)` to
+  `io.to(...)` makes the two-instance test fail with the sequence `[1, 2, 3, 1, 2, 3, 4, 5]` — so the
+  local emit is load-bearing, not a stylistic choice, and the test proves it.
+- **Two of my own tests were weak and were rewritten.** One asserted
+  `expect(['deltas', 'snapshot']).toContain(reply.kind)`, which is true whatever happens; it now
+  trims the stream deliberately and asserts a snapshot. Another polled a variable nothing updated.
+- **Two findings while verifying**: Fastify 5.12 deprecates the `disableRequestLogging` option we
+  passed (we passed its default, so it was removed), and two integration tests that looked like
+  five-second delivery failures turned out to be Postgres seeding and cleanup around the assertions —
+  which is why the timings are now measured on their own.
+
+## Next (milestone 6 — the category engine)
+
+1. **`categories`, `category_schema_versions`, `category_rules`**: the tables from design doc §6.2,
+   with versioned JSONB attribute schemas.
+2. **zod validators generated from a published schema version**, so a lot's attributes are validated
+   against the version it was created under and never against a later one.
+3. **`rules_snapshot` written at scheduling**, from `category_rules` — the mechanism already exists
+   and is already honoured by the engine; milestone 6 is what fills it from a real category.
+4. **The launch categories seeded**: vehicles, phones, electronics, computers, appliances, art,
+   jewellery and watches, luxury fashion, furniture, generators and machinery, and corporate or
+   government asset disposals.
+5. **A test that a new category can be added with no code change**, which is the whole claim.
 
 ## Decisions waiting for Akanji
 
@@ -183,6 +224,18 @@ CI failure locally by deleting every `dist`, `.turbo` and `.next` directory firs
 | 4   | **Node 26 LTS locally.** This machine has Node 24.16.0. CI runs 26.13.0 and `engines` allows 24.16+, so nothing is blocked, but local and CI should match | Install Node 26 LTS when convenient                      |
 
 ## Open issues / things to revisit
+
+- **Browser-level Playwright testing moved from milestone 5 to milestone 7.** There is no bidding UI
+  to drive yet, so a browser test would only prove that `socket.io-client` works inside Chromium. The
+  server claim is tested with two real instances and real socket clients instead. ADR-0009.
+- **One Redis connection per watched lot per instance**, because each tailer blocks on `XREAD`. Fine
+  at demo scale; thousands of simultaneous lots would want a shared multi-stream read. A known
+  change, not a redesign.
+- **Stream retention is 2,000 events per lot.** A client away longer than that gets a snapshot. The
+  number is a guess at "a very busy lot's last few minutes" and should be revisited with real load
+  figures in milestone 11.
+- **Sockets carry no identity yet.** They are read-only, so there is nothing to authorise; milestone 7
+  adds authentication and with it the bid endpoint.
 
 - **The Lua script and the TypeScript engine are two implementations of one set of rules.** They are
   kept in step by the differential test, not by discipline. Any change to `packages/bid-engine` must

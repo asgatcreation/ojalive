@@ -135,15 +135,41 @@ export async function readGroupBatch(
   return events;
 }
 
-/** Entries after `fromId`, for a client that reconnected and sent its last seq. */
-export async function readStreamFrom(
+/**
+ * Entries after `fromSeq`, for a client that reconnected and told us the last
+ * sequence number it saw.
+ *
+ * This is a seek, not a scan, because the entry ids ARE the sequence numbers
+ * (see `append_event` in prelude.lua).
+ */
+export async function readAfterSeq(
   redis: Redis,
   lotId: string,
-  fromId: string,
+  fromSeq: number,
   count_ = 500,
 ): Promise<StreamEvent[]> {
-  const reply = await redis.xrange(lotStreamKey(lotId), `(${fromId}`, '+', 'COUNT', count_);
+  const reply = await redis.xrange(
+    lotStreamKey(lotId),
+    `(${String(fromSeq)}-0`,
+    '+',
+    'COUNT',
+    count_,
+  );
   return reply.map(([id, fields]) => parseStreamEntry(lotId, id, fields));
+}
+
+/**
+ * The oldest sequence number the stream still holds, or null if it is empty.
+ *
+ * Streams are trimmed to a reconnect window, so a client that was away longer
+ * than that cannot be caught up with deltas and must be sent a snapshot
+ * instead. This is how the resync path knows which of the two it owes them.
+ */
+export async function oldestRetainedSeq(redis: Redis, lotId: string): Promise<number | null> {
+  const reply = await redis.xrange(lotStreamKey(lotId), '-', '+', 'COUNT', 1);
+  const first = reply[0];
+  if (first === undefined) return null;
+  return parseStreamEntry(lotId, first[0], first[1]).seq;
 }
 
 export async function ackEvents(

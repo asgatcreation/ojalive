@@ -11,5 +11,6 @@ export * from './scripts.js';
 export * from './replies.js';
 export * from './state.js';
 export * from './stream.js';
+export * from './broadcast.js';
 export * from './persist.js';
 export * from './bid-service.js';

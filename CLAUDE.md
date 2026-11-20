@@ -88,19 +88,19 @@ nearer the user. See `docs/adr/0002-single-region-london.md`.
 
 ### Workspace layout
 
-| Path                  | What it is                                                                                                                                |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`            | Next.js 16 App Router. Server-rendered lot and category pages for SEO, Socket.IO client for live bidding, installable PWA. Port **3001**. |
-| `apps/api`            | Fastify 5 + Socket.IO 4. HTTP API and the real-time layer. Port **4000**.                                                                 |
-| `apps/worker`         | BullMQ: lot closing, the stuck-lot sweeper, bid persistence, settlement, notifications, demo bots.                                        |
-| `packages/shared`     | Types, zod schemas, money (integer kobo), time and clocks, ids. No I/O.                                                                   |
-| `packages/bid-engine` | **Pure** bidding logic. No Redis, no database, no `Date.now()`. The reference model the Lua script is tested against.                     |
-| `packages/db`         | Drizzle schema, migrations and every query the bidding path makes. Postgres is the source of truth.                                       |
-| `packages/live`       | The real-time path: the Lua scripts (`src/lua`), the script runner, the Redis read path, the per-lot event stream, and closing.           |
-| `packages/payments`   | The `PaymentGateway` interface. Implemented with naija-pay in milestone 8.                                                                |
-| `load-tests/`         | k6 scripts (run as a Docker container, not an npm package).                                                                               |
-| `infra/`              | Docker Compose for local Postgres + Redis, and the Redis config.                                                                          |
-| `docs/`               | Design doc, PROGRESS, ADRs, RUNBOOK (milestone 10).                                                                                       |
+| Path                  | What it is                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/web`            | Next.js 16 App Router. Server-rendered lot and category pages for SEO, Socket.IO client for live bidding, installable PWA. Port **3001**.                    |
+| `apps/api`            | Fastify 5 + Socket.IO 4. HTTP API and the real-time layer. Port **4000**.                                                                                    |
+| `apps/worker`         | BullMQ: lot closing, the stuck-lot sweeper, bid persistence, settlement, notifications, demo bots.                                                           |
+| `packages/shared`     | Types, zod schemas, money (integer kobo), time and clocks, ids. No I/O.                                                                                      |
+| `packages/bid-engine` | **Pure** bidding logic. No Redis, no database, no `Date.now()`. The reference model the Lua script is tested against.                                        |
+| `packages/db`         | Drizzle schema, migrations and every query the bidding path makes. Postgres is the source of truth.                                                          |
+| `packages/live`       | The real-time path: the Lua scripts (`src/lua`), the script runner, the Redis read path, the per-lot event stream, closing, and the public broadcast shapes. |
+| `packages/payments`   | The `PaymentGateway` interface. Implemented with naija-pay in milestone 8.                                                                                   |
+| `load-tests/`         | k6 scripts (run as a Docker container, not an npm package).                                                                                                  |
+| `infra/`              | Docker Compose for local Postgres + Redis, and the Redis config.                                                                                             |
+| `docs/`               | Design doc, PROGRESS, ADRs, RUNBOOK (milestone 10).                                                                                                          |
 
 ### The three ideas that matter
 
@@ -112,7 +112,11 @@ nearer the user. See `docs/adr/0002-single-region-london.md`.
 2. **The log is the truth; state is a projection.** `lot_state` can be deleted and
    rebuilt by replaying `bid_events` through `packages/bid-engine`. That is how
    retractions work, and how we recover from losing Redis. ADR-0005.
-3. **Closing happens exactly once**, through four independent layers: a delayed
+3. **Deltas are broadcast by tailing each lot's stream**, not by emitting on accept — because the
+   worker closes lots and is not a Socket.IO server. Every emit is therefore `io.local`: each
+   instance reads the stream itself, so an adapter fan-out would double-deliver. ADR-0009.
+
+4. **Closing happens exactly once**, through four independent layers: a delayed
    BullMQ job, the job re-reading the database end time, an atomic
    compare-and-set in Lua, and a unique constraint on `lot_closures.lot_id`. Plus
    a sweeper every 30 seconds for anything missed. Design doc §8.5.

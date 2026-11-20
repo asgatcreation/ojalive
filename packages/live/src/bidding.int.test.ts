@@ -33,7 +33,7 @@ import {
 } from './int-support.js';
 import { persistStreamEvent } from './persist.js';
 import { readLiveState } from './state.js';
-import { ensureGroup, readGroupBatch, ackEvents, readStreamFrom, pendingCount } from './stream.js';
+import { ensureGroup, readGroupBatch, ackEvents, readAfterSeq, pendingCount } from './stream.js';
 
 let harness: Harness;
 
@@ -47,7 +47,7 @@ afterAll(async () => {
 
 /** Every event the lot's stream holds, oldest first. */
 async function streamEvents(seeded: SeededLot) {
-  return readStreamFrom(harness.redis, seeded.lotId, '0-0', 10_000);
+  return readAfterSeq(harness.redis, seeded.lotId, 0, 10_000);
 }
 
 function bidCommand(

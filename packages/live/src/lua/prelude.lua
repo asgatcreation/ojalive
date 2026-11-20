@@ -23,6 +23,10 @@
 -- quietly stops being true, and `money-format.int.test.ts` pins where the
 -- difference starts. Amounts arrive as strings for the same reason.
 
+-- Events kept per lot for reconnects. Roughly a very busy lot's last few
+-- minutes; beyond it, a reconnecting client is given a snapshot.
+local STREAM_RETENTION = 2000
+
 local function fmt(n)
   return string.format('%.0f', n)
 end
@@ -194,9 +198,16 @@ end
 -- One stream entry per accepted command. It carries the bidder's secret maximum
 -- because the persisting worker needs it for `bid_events`; the API strips it
 -- before anything is broadcast.
+--
+-- The entry id is the lot's own sequence number, `<seq>-0`, not Redis' default
+-- timestamp. Stream ids only have to increase, and `seq` does, so this makes the
+-- stream an index on `seq`: a client that reconnects saying "I last saw 412" is
+-- served by `XRANGE (412-0 +`, which is a seek rather than a scan. The same
+-- entries then drive both the live broadcast and the catch-up, so there is one
+-- ordering authority instead of two that could disagree.
 local function append_event(stream_key, st, fields)
   local args = {
-    'XADD', stream_key, '*',
+    'XADD', stream_key, fmt(st.seq) .. '-0',
     'seq', fmt(st.seq),
     'at', fmt(fields.at),
     'kind', fields.kind,
@@ -214,7 +225,12 @@ local function append_event(stream_key, st, fields)
     'source', fields.source or 'web',
     'lotOutcome', st.outcome or '',
   }
-  return redis.call(unpack(args))
+  local id = redis.call(unpack(args))
+  -- Keep a reconnect window, not the whole history: Postgres has that. A client
+  -- that missed more than this many events gets a fresh snapshot instead of
+  -- deltas, which is cheaper for them as well as for us.
+  redis.call('XTRIM', stream_key, 'MAXLEN', '~', STREAM_RETENTION)
+  return id
 end
 
 local function remember(idem_key, field, payload, ttl_seconds)

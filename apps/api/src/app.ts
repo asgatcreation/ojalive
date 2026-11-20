@@ -4,13 +4,22 @@ import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import Fastify from 'fastify';
 import { newTraceId } from '@ojalive/shared';
+import type { LiveContext } from '@ojalive/live';
+import type { Redis } from 'ioredis';
 import type { ApiEnv } from './env.js';
 import { registry } from './lib/metrics.js';
+import { registerLotRoutes } from './routes/lots.js';
 
 export interface BuildAppOptions {
   readonly env: ApiEnv;
   /** Set by the readiness probe once dependencies are reachable. */
   readonly isReady: () => boolean;
+  /**
+   * Postgres and Redis. Optional so that a test can build an app to check
+   * health, CORS or rate limiting without a database anywhere near it.
+   */
+  readonly live?: LiveContext;
+  readonly redis?: Redis;
 }
 
 /**
@@ -19,7 +28,7 @@ export interface BuildAppOptions {
  * Kept separate from starting it so tests can build an app, inject requests and
  * never open a port.
  */
-export async function buildApp({ env, isReady }: BuildAppOptions) {
+export async function buildApp({ env, isReady, live, redis }: BuildAppOptions) {
   // Pretty logs in development only. Built conditionally rather than set to
   // `undefined`, because `exactOptionalPropertyTypes` treats those differently.
   const transport =
@@ -52,7 +61,6 @@ export async function buildApp({ env, isReady }: BuildAppOptions) {
     genReqId: () => newTraceId(),
     trustProxy: true,
     bodyLimit: 1_000_000,
-    disableRequestLogging: false,
   });
 
   await app.register(sensible);
@@ -88,6 +96,10 @@ export async function buildApp({ env, isReady }: BuildAppOptions) {
     reply.header('content-type', registry.contentType);
     return registry.metrics();
   });
+
+  if (live !== undefined && redis !== undefined) {
+    registerLotRoutes(app, { live, redis });
+  }
 
   return app;
 }
