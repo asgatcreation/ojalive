@@ -19,9 +19,9 @@ building. `pnpm test:int` is green too: **42 integration tests** covering 300 si
 one lot, idempotency, exactly-once closing, recovery from losing Redis entirely, and delta delivery
 across two API instances. Local Postgres 18.6 and Redis 8.10.3 come up healthy with the settings the bid engine
 depends on. The holding page was checked in the browser at phone and desktop widths in light and
-dark. **GitHub Actions run #9 on commit `6d0420c` passed all four jobs**: verify (43 s), integration
-tests against real Postgres, Redis and Lua (47 s), secret scanning (16 s) and dependency audit
-(38 s). Repository: https://github.com/asgatcreation/ojalive
+dark. **GitHub Actions run #11 on commit `e01fd89` passed all four jobs**: verify (52 s), integration
+tests against real Postgres, Redis and Lua (57 s), secret scanning (8 s) and dependency audit
+(27 s). Repository: https://github.com/asgatcreation/ojalive
 
 ## Done
 
